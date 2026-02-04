@@ -63,6 +63,7 @@ function isRetryable(err: unknown): boolean {
 function shouldFallback(err: unknown): boolean {
   if (err instanceof OpenRouterHttpError) {
     if (err.status === 401 && err.bodyText.includes("\"is_byok\":true")) return true
+    if (err.status === 402) return true
     return err.status === 404 || err.status === 429 || err.status >= 500
   }
   return true
