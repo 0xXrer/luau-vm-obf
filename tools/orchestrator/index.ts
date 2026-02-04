@@ -84,6 +84,14 @@ function normalizePatch(patch: string): { text: string; changed: boolean } {
   return { text: `${out.join("\n").trim()}\n`, changed }
 }
 
+function isPatchLike(text: string): boolean {
+  const hasGitDiff = /^diff --git /m.test(text)
+  if (hasGitDiff) return true
+
+  const hasUnifiedMarkers = /^--- /m.test(text) && /^\+\+\+ /m.test(text) && /^@@ /m.test(text)
+  return hasUnifiedMarkers
+}
+
 function canApplyPatch(path: string): boolean {
   try {
     sh(`git apply --check --whitespace=nowarn "${path}"`)
@@ -172,22 +180,19 @@ function materializeAddOnlyPatch(patch: string): number {
 
 function applyPatch(patch: string) {
   const p = join(scratchDir, "patch.diff")
-  writeFileSync(p, patch, "utf8")
+  const normalized = normalizePatch(patch)
+  if (!normalized.text.trim()) throw new Error("Patch was empty after normalization")
+  if (!isPatchLike(normalized.text)) throw new Error("Model response did not contain a valid unified diff")
+
+  if (normalized.changed) {
+    console.error("[orchestrator] malformed diff detected; retrying with normalized patch")
+  }
+  writeFileSync(p, normalized.text, "utf8")
 
   if (canApplyPatch(p)) {
     shInherit(`git apply --whitespace=nowarn "${p}"`)
     return
   }
-
-  const normalized = normalizePatch(patch)
-  if (!normalized.text.trim()) throw new Error("Patch was empty after normalization")
-  if (!normalized.changed) {
-    shInherit(`git apply --whitespace=nowarn "${p}"`)
-    return
-  }
-
-  console.error("[orchestrator] malformed diff detected; retrying with normalized patch")
-  writeFileSync(p, normalized.text, "utf8")
 
   const materialized = materializeAddOnlyPatch(normalized.text)
   if (materialized > 0) {
@@ -195,12 +200,7 @@ function applyPatch(patch: string) {
     return
   }
 
-  if (!canApplyPatch(p)) {
-    shInherit(`git apply --whitespace=nowarn "${p}"`)
-    return
-  }
-
-  shInherit(`git apply --whitespace=nowarn "${p}"`)
+  throw new Error("Patch parse succeeded but changes do not apply to the current repository state")
 }
 
 function getDiff(): string {
@@ -227,13 +227,16 @@ function loadPrompt(role: Role): string {
 
 function extractPatch(output: string): string | null {
   const m = output.match(/```(?:diff|patch)\s*([\s\S]*?)```/im)
-  if (m?.[1]) return m[1].trim() + "\n"
+  if (m?.[1] && isPatchLike(m[1])) return m[1].trim() + "\n"
 
   const diffStart = output.search(/^diff --git /m)
   if (diffStart >= 0) return output.slice(diffStart).trim() + "\n"
 
   const unifiedStart = output.search(/^--- /m)
-  if (unifiedStart >= 0) return output.slice(unifiedStart).trim() + "\n"
+  if (unifiedStart >= 0) {
+    const candidate = output.slice(unifiedStart).trim() + "\n"
+    if (isPatchLike(candidate)) return candidate
+  }
 
   return null
 }
