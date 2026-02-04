@@ -101,6 +101,15 @@ function canApplyPatch(path: string): boolean {
   }
 }
 
+function canApplyPatchThreeWay(path: string): boolean {
+  try {
+    sh(`git apply --check --3way --whitespace=nowarn "${path}"`)
+    return true
+  } catch {
+    return false
+  }
+}
+
 type MaterializedFile = { path: string; content: string }
 
 function normalizeDiffPath(rawPath: string): string | null {
@@ -194,6 +203,12 @@ function applyPatch(patch: string) {
     return
   }
 
+  if (canApplyPatchThreeWay(p)) {
+    console.error("[orchestrator] direct apply failed; retrying with 3-way merge")
+    shInherit(`git apply --3way --whitespace=nowarn "${p}"`)
+    return
+  }
+
   const materialized = materializeAddOnlyPatch(normalized.text)
   if (materialized > 0) {
     console.error(`[orchestrator] applied ${materialized} file(s) from add-only patch fallback`)
@@ -244,25 +259,55 @@ function extractPatch(output: string): string | null {
 async function runRole(llm: Llm, task: Task) {
   const system = loadPrompt(task.role)
   const user = mkIssueText(task)
+  const maxPatchAttempts = Math.max(1, Number.parseInt(process.env.ORCHESTRATOR_PATCH_ATTEMPTS || "3", 10) || 3)
+  const messages: LlmMessage[] = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ]
 
-  const out = await llm.complete({
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    temperature: 0.2,
-  })
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= maxPatchAttempts; attempt++) {
+    const out = await llm.complete({
+      messages,
+      temperature: 0.2,
+    })
 
-  const patch = extractPatch(out)
-  if (!patch) throw new Error(`No patch produced by role=${task.role}`)
+    const patch = extractPatch(out)
+    if (!patch) {
+      lastErr = new Error(`No patch produced by role=${task.role}`)
+    } else {
+      try {
+        applyPatch(patch)
+        const diff = getDiff()
+        if (!diff.trim()) throw new Error(`Empty diff after applying patch role=${task.role}`)
 
-  applyPatch(patch)
+        shInherit("git add -A")
+        shInherit(`git commit -m "agent(${task.role}): ${task.title}"`)
+        return
+      } catch (err) {
+        lastErr = err
+      }
+    }
 
-  const diff = getDiff()
-  if (!diff.trim()) throw new Error(`Empty diff after applying patch role=${task.role}`)
+    if (attempt < maxPatchAttempts) {
+      const errText = lastErr instanceof Error ? lastErr.message : String(lastErr)
+      console.error(`[orchestrator] role=${task.role} patch attempt ${attempt}/${maxPatchAttempts} failed: ${errText}`)
+      messages.push({
+        role: "user",
+        content: [
+          "Your previous patch failed to apply.",
+          `ERROR: ${errText}`,
+          "Return a complete unified git diff only.",
+          "Rules: no placeholders, no explanatory prose, no truncated hunks, no 'index ... ^...' lines.",
+          "Patch must apply to current repo state.",
+        ].join("\n"),
+      })
+    }
+  }
 
-  shInherit("git add -A")
-  shInherit(`git commit -m "agent(${task.role}): ${task.title}"`)
+  throw new Error(
+    `role=${task.role} failed after ${maxPatchAttempts} patch attempt(s): ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
+  )
 }
 
 export async function orchestrate(llm: Llm) {
