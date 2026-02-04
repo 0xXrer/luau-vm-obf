@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "node ./tools/tests/run.js",
     "metrics": "node ./tools/metrics/run.js",
-    "orchestrate": "node ./dist/tools/orchestrator/cli.js"
+    "orchestrate": "npm run build && node ./dist/tools/orchestrator/cli.js"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
