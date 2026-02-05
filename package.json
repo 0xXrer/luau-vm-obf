@@ -1,18 +1,18 @@
-{
-  "name": "luau-vm-obfuscator-mvp",
+﻿{
+  "name": "luau-vm-obfuscator",
   "private": true,
-  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "node ./tools/tests/run.js",
-    "metrics": "node ./tools/metrics/run.js",
-    "orchestrate": "npm run build && node ./dist/tools/orchestrator/cli.js"
+    "build": "tsc -b",
+    "test": "node ./tools/test-runner.js",
+    "lint": "node ./tools/lint-runner.js"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
-  },
-  "dependencies": {
-    "dotenv": "^17.2.3"
+    "typescript": "^5.4.5",
+    "ws": "^8.16.0"
   }
 }

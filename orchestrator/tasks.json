@@ -1,0 +1,62 @@
+﻿{
+  "project": "luau-vm-obfuscator",
+  "status": "initialized",
+  "tasks": [
+    {
+      "id": "A1",
+      "role": "Architect",
+      "title": "Define module interfaces and ADRs",
+      "deps": [],
+      "outputs": ["docs/adr/0001-architecture.md", "packages/architecture/src/index.ts"]
+    },
+    {
+      "id": "V1",
+      "role": "VM Engineer",
+      "title": "Bytecode IR and parser",
+      "deps": ["A1"],
+      "outputs": ["packages/vm/src/bytecode.ts", "packages/vm/src/index.ts"]
+    },
+    {
+      "id": "V2",
+      "role": "VM Engineer",
+      "title": "VM runtime core",
+      "deps": ["V1"],
+      "outputs": ["packages/vm/src/runtime.ts"]
+    },
+    {
+      "id": "O1",
+      "role": "Obfuscator Dev",
+      "title": "Obfuscation pipeline and transforms",
+      "deps": ["A1"],
+      "outputs": ["packages/obfuscator/src/pipeline.ts"]
+    },
+    {
+      "id": "O2",
+      "role": "Obfuscator Dev",
+      "title": "String encryption and opaque predicates",
+      "deps": ["O1"],
+      "outputs": ["packages/obfuscator/src/transforms.ts"]
+    },
+    {
+      "id": "T1",
+      "role": "Tester",
+      "title": "Test harness and fixtures",
+      "deps": ["A1"],
+      "outputs": ["packages/cli/src/runner.ts", "tests"]
+    },
+    {
+      "id": "T2",
+      "role": "Tester",
+      "title": "Benchmarks and perf gates",
+      "deps": ["V2", "O1"],
+      "outputs": ["benchmarks"]
+    },
+    {
+      "id": "R1",
+      "role": "Reviewer",
+      "title": "Review, refactor, optimize",
+      "deps": ["V2", "O2", "T1"],
+      "outputs": ["review.md"]
+    }
+  ]
+}

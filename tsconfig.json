@@ -1,14 +1,9 @@
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "Bundler",
-    "outDir": "dist",
-    "rootDir": ".",
-    "strict": true,
-    "skipLibCheck": true
-  },
-  "include": [
-    "tools/orchestrator/**/*.ts"
+﻿{
+  "files": [],
+  "references": [
+    { "path": "./packages/architecture" },
+    { "path": "./packages/vm" },
+    { "path": "./packages/obfuscator" },
+    { "path": "./packages/cli" }
   ]
 }
