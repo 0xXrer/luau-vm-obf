@@ -187,6 +187,20 @@ function materializeAddOnlyPatch(patch: string): number {
   return files.length
 }
 
+function replaceFilesFromAddOnlyPatch(patch: string): number {
+  const parsed = parseAddOnlyPatchFiles(patch)
+  if (!parsed.isFullyAddOnly) return 0
+
+  let count = 0
+  for (const f of parsed.files) {
+    const abs = join(repoRoot, f.path)
+    mkdirSync(dirname(abs), { recursive: true })
+    writeFileSync(abs, f.content, "utf8")
+    count++
+  }
+  return count
+}
+
 function applyPatch(patch: string) {
   const p = join(scratchDir, "patch.diff")
   const normalized = normalizePatch(patch)
@@ -212,6 +226,12 @@ function applyPatch(patch: string) {
   const materialized = materializeAddOnlyPatch(normalized.text)
   if (materialized > 0) {
     console.error(`[orchestrator] applied ${materialized} file(s) from add-only patch fallback`)
+    return
+  }
+
+  const replaced = replaceFilesFromAddOnlyPatch(normalized.text)
+  if (replaced > 0) {
+    console.error(`[orchestrator] replaced ${replaced} file(s) from add-only patch fallback`)
     return
   }
 
